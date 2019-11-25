@@ -139,19 +139,52 @@ public class GridWorld {
 
 	public void qLearningExample(String outputPath){
 
-		LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, -1., 0.1);
+		/** q learning params
+		 * QLearning(SADomain domain, double gamma, HashableStateFactory hashingFactory, double qInit, double learningRate)
+		 * @param domain the domain in which to learn
+		 * @param gamma the discount factor
+		 * @param hashingFactory the state hashing factory to use for Q-lookups
+		 * @param qInit a {@link burlap.behavior.valuefunction.QFunction} object that can be used to initialize the Q-values.
+		 * @param learningRate the learning rate
+		 * @param learningPolicy the learning policy to follow during a learning episode.
+		 * @param maxEpisodeSize the maximum number of steps the agent will take in a learning episode for the agent stops trying.
+		 */
+		File file = new File("csv/gridworldqlearning.csv"); 
+        Scanner sc = new Scanner(System.in); 
+        try { 
+            // create FileWriter object with file as parameter 
+            FileWriter outputfile = new FileWriter(file); 
+  
+            // create CSVWriter with ';' as separator 
+            CSVWriter writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
+            LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 0.99);
+			writer.writeNext(new String[] {"Episode", "steps","rewards"});
+    		
+    		//run learning for 50 episodes
+    		for(int i = 0; i < 10000; i++){
+    			Episode e = agent.runLearningEpisode(env, 1000);
 
-		//run learning for 50 episodes
-		for(int i = 0; i < 1000; i++){
-			Episode e = agent.runLearningEpisode(env);
-
-//			e.write(outputPath + "ql_" + i);
-			System.out.println(i + ": " + e.maxTimeStep());
-			helper.printEpisodeStats(e);
-
-			//reset environment for next learning episode
-			env.resetEnvironment();
-		}
+//    			e.write(outputPath + "ql_" + i);
+    			System.out.println(i + ": " + e.numTimeSteps());
+//    			System.out.println(i+": " +((QLearning)agent).getMaxQChangeInLastEpisode());
+//    			helper.printEpisodeStats(e);
+//    			System.out.println(helper.gettotalreward(e));
+//    			System.out.println(e.numTimeSteps());
+    			
+    			//reset environment for next learning episode
+    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(e.numTimeSteps()), String.valueOf(helper.gettotalreward(e))});
+    			env.resetEnvironment();
+    		}
+    		writer.close();
+        }
+        catch (IOException e) { 
+            // TODO Auto-generated catch block 
+            e.printStackTrace();
+        }
+		
 
 	}
 	
@@ -235,9 +268,12 @@ public class GridWorld {
 		
 	}
 
-	public void varyGamma() {
+	public void varyGamma(boolean pi) {
 		double[] gammas = {0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,0.99};
 		File file = new File("csv/gridworldvigammatest.csv"); 
+		if (pi==true) {
+			
+		}
         Scanner sc = new Scanner(System.in); 
         try { 
             // create FileWriter object with file as parameter 

@@ -121,38 +121,7 @@ public class NonGridWorld {
 
 
 	}	
-	public void experimentAndPlotter(){
-
-		//different reward function for more structured performance plots
-		((FactoredModel)domain.getModel()).setRf(new GoalBasedRF(this.goalCondition, 5.0, -0.1));
-
-		/**
-		 * Create factories for Q-learning agent and SARSA agent to compare
-		 */
-		LearningAgentFactory qLearningFactory = new LearningAgentFactory() {
-
-			public String getAgentName() {
-				return "Q-Learning";
-			}
-
-
-			public LearningAgent generateAgent() {
-				return new QLearning(domain, 0.99, hashingFactory, 0.3, 0.9);
-			}
-		};
-
-
-		LearningAlgorithmExperimenter exp = new LearningAlgorithmExperimenter(
-			env, 10, 100, qLearningFactory);
-		exp.setUpPlottingConfiguration(500, 250, 2, 1000,
-				TrialMode.MOST_RECENT_AND_AVERAGE,
-				PerformanceMetric.CUMULATIVE_STEPS_PER_EPISODE,
-				PerformanceMetric.AVERAGE_EPISODE_REWARD);
-
-		exp.startExperiment();
-		exp.writeStepAndEpisodeDataToCSV("expData");
-
-	}
+	
 	
 	public void policyIterationExample(String filnam){
 
@@ -167,7 +136,8 @@ public class NonGridWorld {
 	
 	public void qLearningExample(String outputPath){
 
-		/** 
+		/** q learning params
+		 * QLearning(SADomain domain, double gamma, HashableStateFactory hashingFactory, double qInit, double learningRate)
 		 * @param domain the domain in which to learn
 		 * @param gamma the discount factor
 		 * @param hashingFactory the state hashing factory to use for Q-lookups
@@ -176,20 +146,44 @@ public class NonGridWorld {
 		 * @param learningPolicy the learning policy to follow during a learning episode.
 		 * @param maxEpisodeSize the maximum number of steps the agent will take in a learning episode for the agent stops trying.
 		 */
-		LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 0.99);
+		File file = new File("csv/nongridworldqlearning.csv"); 
+        Scanner sc = new Scanner(System.in); 
+        try { 
+            // create FileWriter object with file as parameter 
+            FileWriter outputfile = new FileWriter(file); 
+  
+            // create CSVWriter with ';' as separator 
+            CSVWriter writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
+            LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 0.99,100);
+			writer.writeNext(new String[] {"Episode", "steps","rewards"});
+    		
+    		//run learning for 50 episodes
+    		for(int i = 0; i < 1000; i++){
+    			long start = System.nanoTime();
+    			Episode e = agent.runLearningEpisode(env, 100);
+    			
 
-		//run learning for 50 episodes
-		for(int i = 0; i < 10000; i++){
-			Episode e = agent.runLearningEpisode(env, 1000);
-
-//			e.write(outputPath + "ql_" + i);
-			System.out.println(i + ": " + e.maxTimeStep());
-			System.out.println(i+": " +((QLearning)agent).getMaxQChangeInLastEpisode());
-			helper.printEpisodeStats(e);
-
-			//reset environment for next learning episode
-			env.resetEnvironment();
-		}
+//    			e.write(outputPath + "ql_" + i);
+    			System.out.println(i + ": " + e.numTimeSteps());
+//    			System.out.println(i+": " +((QLearning)agent).getMaxQChangeInLastEpisode());
+//    			helper.printEpisodeStats(e);
+//    			System.out.println(helper.gettotalreward(e));
+//    			System.out.println(e.numTimeSteps());
+    			
+    			//reset environment for next learning episode
+    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(e.numTimeSteps()), String.valueOf(helper.gettotalreward(e))});
+    			env.resetEnvironment();
+    		}
+    		writer.close();
+        }
+        catch (IOException e) { 
+            // TODO Auto-generated catch block 
+            e.printStackTrace();
+        }
+		
 
 	}
 	
@@ -232,8 +226,8 @@ public class NonGridWorld {
 //		world.policyIterationExample("nongridpi");
 //		world.varyGamma();
 		
-//		world.qLearningExample("csv/");
-		world.experimentAndPlotter();
+		world.qLearningExample("csv/");
+//		world.experimentAndPlotter();
 //		PolicyUtils.rollout(p, st, domain.getModel()).write( "csv/testvi");
 //		Visualizer v = BlockDudeVisualizer.getVisualizer(bd.getMaxx(), bd.getMaxy());
 //
@@ -273,7 +267,7 @@ public class NonGridWorld {
 			if( ex == ax && ey == ay) {
 				return 1000.;
 			}else {
-				return 0;
+				return -0.01;
 			}
 		}
 	}
