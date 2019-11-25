@@ -1,4 +1,5 @@
 import burlap.behavior.policy.GreedyQPolicy;
+import java.util.ArrayList;
 import burlap.behavior.policy.Policy;
 import burlap.behavior.policy.PolicyUtils;
 import burlap.behavior.singleagent.Episode;
@@ -25,6 +26,7 @@ import burlap.behavior.singleagent.planning.deterministic.uninformed.dfs.DFS;
 import burlap.behavior.valuefunction.QProvider;
 import burlap.behavior.valuefunction.ValueFunction;
 import burlap.domain.singleagent.gridworld.GridWorldDomain;
+import burlap.domain.singleagent.gridworld.GridWorldRewardFunction;
 import burlap.domain.singleagent.gridworld.GridWorldTerminalFunction;
 import burlap.domain.singleagent.gridworld.GridWorldVisualizer;
 import burlap.domain.singleagent.gridworld.state.GridAgent;
@@ -46,7 +48,13 @@ import burlap.statehashing.simple.SimpleHashableStateFactory;
 import burlap.visualizer.Visualizer;
 
 import java.awt.*;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.List;
+import java.util.Scanner;
+
+import com.opencsv.CSVWriter;
 public class GridWorld {
 	
 	
@@ -80,6 +88,24 @@ public class GridWorld {
 //		gwdg.setMapToFourRooms();
 		tf = new GridWorldTerminalFunction(size-1, size-1);
 		gwdg.setTf(tf);
+		GridWorldRewardFunction rf = new GridWorldRewardFunction(size,size,-1);
+		rf.setReward(size-1, size-1, 0);
+		gwdg.setRf(rf);
+		goalCondition = new TFGoalCondition(tf);
+		domain = gwdg.generateDomain();
+
+		initialState = new GridWorldState(new GridAgent(0, 0), new GridLocation(size-1, size-1, "loc0"));
+		hashingFactory = new SimpleHashableStateFactory();
+
+		env = new SimulatedEnvironment(domain, initialState);
+	}
+	public GridWorld(int size) {
+
+//		gwdg = new GridWorldDomain(2, 11);
+		gwdg= createFourRooms(size);
+//		gwdg.setMapToFourRooms();
+		tf = new GridWorldTerminalFunction(size-1, size-1);
+		gwdg.setTf(tf);
 		goalCondition = new TFGoalCondition(tf);
 		domain = gwdg.generateDomain();
 
@@ -95,54 +121,52 @@ public class GridWorld {
 	}
 
 
-	public void valueIterationExample(String outputPath){
+	public Planner valueIterationExample(String outputPath){
 
-		Planner planner = new ValueIteration(domain, 0.99, hashingFactory, 0.001, 100, "gridvi");
-		Policy p = planner.planFromState(initialState);
+		Planner planner = new ValueIteration(domain, 0.99, hashingFactory, 0.001, 100, outputPath);
 		planner.toggleDebugPrinting(true);
+		Policy p = planner.planFromState(initialState);
 
-//		PolicyUtils.rollout(p, initialState, domain.getModel()).write(outputPath + "vi");
-
+		Episode episode = PolicyUtils.rollout(p, initialState, domain.getModel());
+//		episode.write(outputPath + "vi");
+		helper.printEpisodeStats(episode);
 //		simpleValueFunctionVis((ValueFunction)planner, p);
 		//manualValueFunctionVis((ValueFunction)planner, p);
+		return planner;
 
 	}
 
 
 	public void qLearningExample(String outputPath){
 
-		LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 1.);
+		LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, -1., 0.1);
 
 		//run learning for 50 episodes
-		for(int i = 0; i < 50; i++){
+		for(int i = 0; i < 1000; i++){
 			Episode e = agent.runLearningEpisode(env);
 
-			e.write(outputPath + "ql_" + i);
+//			e.write(outputPath + "ql_" + i);
 			System.out.println(i + ": " + e.maxTimeStep());
+			helper.printEpisodeStats(e);
 
 			//reset environment for next learning episode
 			env.resetEnvironment();
 		}
 
 	}
+	
+	public void policyIterationExample(String filnam) {
+		Planner planner = new PolicyIteration(domain, 0.99, hashingFactory,0.001,10000,100,"gridpi");
+		planner.toggleDebugPrinting(true);
+		Policy p = planner.planFromState(initialState);
 
-
-	public void sarsaLearningExample(String outputPath){
-
-		LearningAgent agent = new SarsaLam(domain, 0.99, hashingFactory, 0., 0.5, 0.3);
-
-		//run learning for 50 episodes
-		for(int i = 0; i < 50; i++){
-			Episode e = agent.runLearningEpisode(env);
-
-			e.write(outputPath + "sarsa_" + i);
-			System.out.println(i + ": " + e.maxTimeStep());
-
-			//reset environment for next learning episode
-			env.resetEnvironment();
-		}
-
+		Episode episode = PolicyUtils.rollout(p, initialState, domain.getModel());
+//		episode.write(outputPath + "vi");
+		helper.printEpisodeStats(episode);
+		
 	}
+
+
 
 	public void simpleValueFunctionVis(ValueFunction valueFunction, Policy p){
 
@@ -202,8 +226,50 @@ public class GridWorld {
 
 
 	}
+	
+	public void varySize() {
+		for (int i = 5;i <100;i+=5) {
+			GridWorld gw = new GridWorld(i);
+			gw.valueIterationExample("vi_l"+String.valueOf(i));
+		}
+		
+	}
 
+	public void varyGamma() {
+		double[] gammas = {0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,0.99};
+		File file = new File("csv/gridworldvigammatest.csv"); 
+        Scanner sc = new Scanner(System.in); 
+        try { 
+            // create FileWriter object with file as parameter 
+            FileWriter outputfile = new FileWriter(file); 
+  
+            // create CSVWriter with ';' as separator 
+            CSVWriter writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
 
+            writer.writeNext(new String[]{"Gamma","Stepstogoal","numIterations","wallclockruntime"});
+    		for (int i = 0; i<gammas.length;i++) {
+    			for (int j = 0; j<3;j++) {
+	    			Planner planner = new ValueIteration(domain, gammas[i], hashingFactory, 0.001, 100, "gridvi");
+	    			planner.toggleDebugPrinting(true);
+	    			Policy p = planner.planFromState(initialState);
+	    			Episode episode = PolicyUtils.rollout(p, initialState, domain.getModel());
+	    			int steps = helper.printEpisodeStats(episode);
+	    			int iterations=((ValueIteration)planner).getConvergenceIterations();
+	    			double wallclock= ((ValueIteration)planner).getRunTime();
+	    			writer.writeNext(new String[] {String.valueOf(gammas[i]),String.valueOf(steps),
+	    					String.valueOf(iterations),String.valueOf(wallclock)});
+    			}
+    		}
+            writer.close(); 
+        } 
+        catch (IOException e) { 
+            // TODO Auto-generated catch block 
+            e.printStackTrace(); 
+        } 
+	}
 	public void experimentAndPlotter(){
 
 		//different reward function for more structured performance plots
@@ -253,10 +319,13 @@ public class GridWorld {
 	public static void main(String[] args) {
 		GridWorld grid = new GridWorld();
 		final String outputPath = "csv/";
-		grid.valueIterationExample(outputPath+"temp");
+//		grid.valueIterationExample("gridvi");
+//		grid.varyGamma();
+//		grid.policyIterationExample("gridpi");
+		grid.qLearningExample("csv/");
 		
 //		grid.experimentAndPlotter();
-		grid.visualize(outputPath);
+//		grid.visualize(outputPath);
 
 	}
 	

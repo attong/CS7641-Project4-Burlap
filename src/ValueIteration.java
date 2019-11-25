@@ -72,6 +72,7 @@ public class ValueIteration extends DynamicProgramming implements Planner {
 	private String filnam;
 	
 	private int convergenceIterations;
+	private long runtime;
 	/**
 	 * Initializers the valueFunction.
 	 * @param domain the domain in which to plan
@@ -86,7 +87,12 @@ public class ValueIteration extends DynamicProgramming implements Planner {
 		this.maxIterations = maxIterations;
 		this.filnam = filnam;
 		this.convergenceIterations = 0;
+		this.runtime = 0;
 		
+	}
+	
+	public long getRunTime() {
+		return this.runtime;
 	}
 	
 	
@@ -153,7 +159,7 @@ public class ValueIteration extends DynamicProgramming implements Planner {
 		}
 		
 		Set <HashableState> states = valueFunction.keySet();
-		File file = new File("csv/"+this.filnam+".csv"); 
+		File file = new File("csv/valueiteration/"+this.filnam+".csv"); 
         Scanner sc = new Scanner(System.in); 
         try { 
             // create FileWriter object with file as parameter 
@@ -168,13 +174,14 @@ public class ValueIteration extends DynamicProgramming implements Planner {
             List<String> data = new ArrayList<String>(); 
             data.add("Iterations");
             data.add("TotalV");
-            writer.writeNext(new String[]{"Iterations","TotalV"});
+            writer.writeNext(new String[]{"Iterations","TotalV","Wallclock"});
             // create a List which contains Data 
     		int i;
     		for(i = 0; i < this.maxIterations; i++){
     			
     			double delta = 0.;
     			double sum = 0;
+    			long start = System.nanoTime();
     			for(HashableState sh : states){
     				
     				double v = this.value(sh);
@@ -183,7 +190,8 @@ public class ValueIteration extends DynamicProgramming implements Planner {
     				delta = Math.max(Math.abs(maxQ - v), delta);
     				
     			}
-    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(sum)});
+    			this.runtime += System.nanoTime()-start;
+    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(sum), String.valueOf(this.runtime/1000000000.)});
     			if(delta < this.maxDelta){
     				break; //approximated well enough; stop iterating
     			}
