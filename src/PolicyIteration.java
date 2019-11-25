@@ -123,7 +123,11 @@ public class PolicyIteration extends DynamicProgramming implements Planner {
 		
 		this.evaluativePolicy = new GreedyQPolicy(this.getCopyOfValueFunction());
 	}
+
 	
+	public int getConvergenceIterations() {
+		return this.numIterations;
+	}
 	
 	/**
 	 * Sets the initial policy that will be evaluated when planning with policy iteration begins. After the first policy iteration,
@@ -168,6 +172,9 @@ public class PolicyIteration extends DynamicProgramming implements Planner {
 		return totalValueIterations;
 	}
 
+	public long getRunTime() {
+		return this.wallclocktime;
+	}
 	/**
 	 * Plans from the input state and then returns a {@link burlap.behavior.policy.GreedyQPolicy} that greedily
 	 * selects the action with the highest Q-value and breaks ties uniformly randomly.
@@ -202,7 +209,7 @@ public class PolicyIteration extends DynamicProgramming implements Planner {
 			        writer.writeNext(new String[]{String.valueOf(iterations), 
 			        		String.valueOf(getVtotal()), String.valueOf(this.wallclocktime/1000000000.)});
 				}while(delta > this.maxPIDelta && iterations < maxPolicyIterations);
-	
+				this.numIterations=iterations;
 				this.hasRunPlanning = true;
 		        writer.close();
 				

@@ -161,11 +161,13 @@ public class GridWorld {
                                              CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
                                              CSVWriter.DEFAULT_LINE_END); 
             LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 0.99);
-			writer.writeNext(new String[] {"Episode", "steps","rewards"});
-    		
+			writer.writeNext(new String[] {"Episode", "steps","rewards","runtime"});
+    		long totaltime = 0;
     		//run learning for 50 episodes
-    		for(int i = 0; i < 10000; i++){
+    		for(int i = 0; i < 1000; i++){
+    			long start = System.nanoTime();
     			Episode e = agent.runLearningEpisode(env, 1000);
+    			totaltime += System.nanoTime()-start; 
 
 //    			e.write(outputPath + "ql_" + i);
     			System.out.println(i + ": " + e.numTimeSteps());
@@ -175,7 +177,8 @@ public class GridWorld {
 //    			System.out.println(e.numTimeSteps());
     			
     			//reset environment for next learning episode
-    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(e.numTimeSteps()), String.valueOf(helper.gettotalreward(e))});
+    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(e.numTimeSteps()),
+    					String.valueOf(helper.gettotalreward(e)), String.valueOf(totaltime/1000000000.)});
     			env.resetEnvironment();
     		}
     		writer.close();
@@ -197,6 +200,42 @@ public class GridWorld {
 //		episode.write(outputPath + "vi");
 		helper.printEpisodeStats(episode);
 		
+	}
+	final class runResults{
+		private Planner p;
+		private Episode e;
+		private int iterations;
+		public runResults(Planner p, Episode e, int iterations) {
+			this.p=p;
+			this.e=e;
+			this.iterations = iterations;
+		}
+		public Planner getPlanner() {
+			return this.p;
+		}
+		public Episode getEpisode() {
+			return this.e;
+		}
+		public int getIterations() {
+			return this.iterations;
+		}
+	}
+	
+	public runResults runPI() {
+		Planner planner = new PolicyIteration(domain, 0.99, hashingFactory,0.001,10000,100,"gridpi");
+		Policy p = planner.planFromState(initialState);
+		Episode episode = PolicyUtils.rollout(p, initialState, domain.getModel());	
+		runResults result = new runResults(planner, episode, ((PolicyIteration)planner).getTotalPolicyIterations());
+		return result;
+	}
+	
+	public runResults runVI() {
+		Planner planner = new ValueIteration(domain, 0.99, hashingFactory, 0.001, 100, "trash");
+		Policy p = planner.planFromState(initialState);
+
+		Episode episode = PolicyUtils.rollout(p, initialState, domain.getModel());
+		runResults result = new runResults(planner, episode, ((ValueIteration)planner).getConvergenceIterations());
+		return result;
 	}
 
 
@@ -261,10 +300,58 @@ public class GridWorld {
 	}
 	
 	public void varySize() {
-		for (int i = 5;i <100;i+=5) {
-			GridWorld gw = new GridWorld(i);
-			gw.valueIterationExample("vi_l"+String.valueOf(i));
-		}
+		try {
+			File file = new File("csv/policyiteration/gridworldpisizetest.csv");
+
+            // create FileWriter object with file as parameter 
+            FileWriter outputfile = new FileWriter(file); 
+  
+            // create CSVWriter with ';' as separator 
+            CSVWriter writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
+
+            writer.writeNext(new String[]{"Size","Stepstogoal","numIterations","wallclockruntime"});
+			for (int i = 5;i <50;i+=5) {
+				GridWorld gw = new GridWorld(i);
+				long start = System.nanoTime();
+				runResults results = (runResults) gw.runPI();
+				long time = System.nanoTime()-start;
+				int steps = helper.getNumSteps(results.getEpisode());
+				int iterations = results.getIterations();
+				writer.writeNext(new String[] {String.valueOf(i), String.valueOf(steps),String.valueOf(iterations),String.valueOf(time)});
+				
+			}
+			writer.close();
+			//value iteration
+			File newfile = new File("csv/valueiteration/gridworldvisizetest.csv");
+
+            // create FileWriter object with file as parameter 
+            outputfile = new FileWriter(newfile); 
+  
+            // create CSVWriter with ';' as separator 
+            writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
+
+            writer.writeNext(new String[]{"Size","Stepstogoal","numIterations","wallclockruntime"});
+			for (int i = 5;i <50;i+=5) {
+				GridWorld gw = new GridWorld(i);
+				long start = System.nanoTime();
+				runResults results = (runResults) gw.runVI();
+				long time = System.nanoTime()-start;
+				int steps = helper.getNumSteps(results.getEpisode());
+				int iterations = results.getIterations();
+				writer.writeNext(new String[] {String.valueOf(i), String.valueOf(steps),String.valueOf(iterations),String.valueOf(time)});
+				
+			}
+			writer.close();
+		} catch (IOException e) { 
+            // TODO Auto-generated catch block 
+            e.printStackTrace(); 
+        } 
 		
 	}
 
@@ -272,7 +359,7 @@ public class GridWorld {
 		double[] gammas = {0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,0.99};
 		File file = new File("csv/gridworldvigammatest.csv"); 
 		if (pi==true) {
-			
+			file = new File("csv/valueiteration/gridworldpigammatest.csv");
 		}
         Scanner sc = new Scanner(System.in); 
         try { 
@@ -289,12 +376,23 @@ public class GridWorld {
     		for (int i = 0; i<gammas.length;i++) {
     			for (int j = 0; j<3;j++) {
 	    			Planner planner = new ValueIteration(domain, gammas[i], hashingFactory, 0.001, 100, "gridvi");
+	    			if (pi==true) {
+	    				planner = new PolicyIteration(domain, 0.99, hashingFactory,0.001,10000,100,"gridpi");
+	    			}
 	    			planner.toggleDebugPrinting(true);
 	    			Policy p = planner.planFromState(initialState);
 	    			Episode episode = PolicyUtils.rollout(p, initialState, domain.getModel());
 	    			int steps = helper.printEpisodeStats(episode);
-	    			int iterations=((ValueIteration)planner).getConvergenceIterations();
-	    			double wallclock= ((ValueIteration)planner).getRunTime();
+	    			int iterations=0;
+	    			double wallclock=0;
+	    			if (pi==true) {
+		    			iterations=((PolicyIteration)planner).getConvergenceIterations();
+		    			wallclock= ((PolicyIteration)planner).getRunTime();
+	    				
+	    			}else {
+		    			iterations=((ValueIteration)planner).getConvergenceIterations();
+		    			wallclock= ((ValueIteration)planner).getRunTime();
+	    			}
 	    			writer.writeNext(new String[] {String.valueOf(gammas[i]),String.valueOf(steps),
 	    					String.valueOf(iterations),String.valueOf(wallclock)});
     			}
@@ -355,9 +453,11 @@ public class GridWorld {
 	public static void main(String[] args) {
 		GridWorld grid = new GridWorld();
 		final String outputPath = "csv/";
-//		grid.valueIterationExample("gridvi");
-//		grid.varyGamma();
-//		grid.policyIterationExample("gridpi");
+		grid.varySize();
+		grid.varyGamma(false);
+		grid.varyGamma(true);
+		grid.valueIterationExample("gridvi");
+		grid.policyIterationExample("gridpi");
 		grid.qLearningExample("csv/");
 		
 //		grid.experimentAndPlotter();

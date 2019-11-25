@@ -157,14 +157,14 @@ public class NonGridWorld {
                                              CSVWriter.NO_QUOTE_CHARACTER, 
                                              CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
                                              CSVWriter.DEFAULT_LINE_END); 
-            LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 0.99,100);
-			writer.writeNext(new String[] {"Episode", "steps","rewards"});
-    		
+            LearningAgent agent = new QLearning(domain, 0.99, hashingFactory, 0., 0.99);
+			writer.writeNext(new String[] {"Episode", "steps","rewards", "time"});
+    		long totaltime = 0;
     		//run learning for 50 episodes
     		for(int i = 0; i < 1000; i++){
     			long start = System.nanoTime();
     			Episode e = agent.runLearningEpisode(env, 100);
-    			
+    			totaltime += System.nanoTime()-start; 
 
 //    			e.write(outputPath + "ql_" + i);
     			System.out.println(i + ": " + e.numTimeSteps());
@@ -174,7 +174,8 @@ public class NonGridWorld {
 //    			System.out.println(e.numTimeSteps());
     			
     			//reset environment for next learning episode
-    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(e.numTimeSteps()), String.valueOf(helper.gettotalreward(e))});
+    			writer.writeNext(new String[] {String.valueOf(i+1), String.valueOf(e.numTimeSteps()),
+    					String.valueOf(helper.gettotalreward(e)), String.valueOf(totaltime/1000000000.)});
     			env.resetEnvironment();
     		}
     		writer.close();
@@ -187,9 +188,12 @@ public class NonGridWorld {
 
 	}
 	
-	public void varyGamma() {
+	public void varyGamma(boolean pi) {
 		double[] gammas = {0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7,0.75,0.8,0.85,0.9,0.95,0.99};
-		File file = new File("csv/nongridworldvigamma.csv"); 
+		File file = new File("csv/valueiteration/nongridworldvigammatest.csv"); 
+		if (pi==true) {
+			file = new File("csv/policyiteration/nongridworldpigammatest.csv");
+		}
         Scanner sc = new Scanner(System.in); 
         try { 
             // create FileWriter object with file as parameter 
@@ -201,16 +205,29 @@ public class NonGridWorld {
                                              CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
                                              CSVWriter.DEFAULT_LINE_END); 
 
-            writer.writeNext(new String[]{"Gamma","Stepstogoal","numIterations"});
+            writer.writeNext(new String[]{"Gamma","Stepstogoal","numIterations","wallclockruntime"});
     		for (int i = 0; i<gammas.length;i++) {
     			for (int j = 0; j<3;j++) {
-	    			Planner planner = new ValueIteration(domain, gammas[i], hashingFactory, 0.001, 100, "nongridvi");
+	    			Planner planner = new ValueIteration(domain, gammas[i], hashingFactory, 0.001, 100, "gridvi");
+	    			if (pi==true) {
+	    				planner = new PolicyIteration(domain, 0.99, hashingFactory,0.001,10000,100,"gridpi");
+	    			}
 	    			planner.toggleDebugPrinting(true);
 	    			Policy p = planner.planFromState(st);
 	    			Episode episode = PolicyUtils.rollout(p, st, domain.getModel());
 	    			int steps = helper.printEpisodeStats(episode);
-	    			int iterations=((ValueIteration)planner).getConvergenceIterations();
-	    			writer.writeNext(new String[] {String.valueOf(gammas[i]),String.valueOf(steps),String.valueOf(iterations)});
+	    			int iterations=0;
+	    			double wallclock=0;
+	    			if (pi==true) {
+		    			iterations=((PolicyIteration)planner).getConvergenceIterations();
+		    			wallclock= ((PolicyIteration)planner).getRunTime();
+	    				
+	    			}else {
+		    			iterations=((ValueIteration)planner).getConvergenceIterations();
+		    			wallclock= ((ValueIteration)planner).getRunTime();
+	    			}
+	    			writer.writeNext(new String[] {String.valueOf(gammas[i]),String.valueOf(steps),
+	    					String.valueOf(iterations),String.valueOf(wallclock)});
     			}
     		}
             writer.close(); 
@@ -220,13 +237,103 @@ public class NonGridWorld {
             e.printStackTrace(); 
         } 
 	}
+	final class runResults{
+		private Planner p;
+		private Episode e;
+		private int iterations;
+		public runResults(Planner p, Episode e, int iterations) {
+			this.p=p;
+			this.e=e;
+			this.iterations = iterations;
+		}
+		public Planner getPlanner() {
+			return this.p;
+		}
+		public Episode getEpisode() {
+			return this.e;
+		}
+		public int getIterations() {
+			return this.iterations;
+		}
+	}
+	public runResults runPI() {
+		Planner planner = new PolicyIteration(domain, 0.99, hashingFactory,0.001,10000,100,"gridpi");
+		Policy p = planner.planFromState(st);
+		Episode episode = PolicyUtils.rollout(p, st, domain.getModel());	
+		runResults result = new runResults(planner, episode, ((PolicyIteration)planner).getTotalPolicyIterations());
+		return result;
+	}
+	
+	public runResults runVI() {
+		Planner planner = new ValueIteration(domain, 0.99, hashingFactory, 0.001, 100, "trash");
+		Policy p = planner.planFromState(st);
+
+		Episode episode = PolicyUtils.rollout(p, st, domain.getModel());
+		runResults result = new runResults(planner, episode, ((ValueIteration)planner).getConvergenceIterations());
+		return result;
+	}
+	public void varySize() {
+		try {
+			File file = new File("csv/policyiteration/nongridworldpisizetest.csv");
+
+            // create FileWriter object with file as parameter 
+            FileWriter outputfile = new FileWriter(file); 
+  
+            // create CSVWriter with ';' as separator 
+            CSVWriter writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
+
+            writer.writeNext(new String[]{"Size","Stepstogoal","numIterations","wallclockruntime"});
+			for (int i = 2;i <4;i+=1) {
+				NonGridWorld gw = new NonGridWorld(i);
+				long start = System.nanoTime();
+				runResults results = (runResults) gw.runPI();
+				long time = System.nanoTime()-start;
+				int steps = helper.getNumSteps(results.getEpisode());
+				int iterations = results.getIterations();
+				writer.writeNext(new String[] {String.valueOf(i), String.valueOf(steps),String.valueOf(iterations),String.valueOf(time)});
+				
+			}
+			//value iteration
+			file = new File("csv/valueiteration/nongridworldvisizetest.csv");
+
+            // create FileWriter object with file as parameter 
+            outputfile = new FileWriter(file); 
+  
+            // create CSVWriter with ';' as separator 
+            writer = new CSVWriter(outputfile, ',', 
+                                             CSVWriter.NO_QUOTE_CHARACTER, 
+                                             CSVWriter.DEFAULT_ESCAPE_CHARACTER, 
+                                             CSVWriter.DEFAULT_LINE_END); 
+
+            writer.writeNext(new String[]{"Size","Stepstogoal","numIterations","wallclockruntime"});
+			for (int i = 1;i <4;i+=2) {
+				NonGridWorld gw = new NonGridWorld(i);
+				long start = System.nanoTime();
+				runResults results = (runResults) gw.runVI();
+				long time = System.nanoTime()-start;
+				int steps = helper.getNumSteps(results.getEpisode());
+				int iterations = results.getIterations();
+				writer.writeNext(new String[] {String.valueOf(i), String.valueOf(steps),String.valueOf(iterations),String.valueOf(time)});
+				
+			}
+		} catch (IOException e) { 
+            // TODO Auto-generated catch block 
+            e.printStackTrace(); 
+        } 
+		
+	}
 	public static void main(String[] args) {
 		NonGridWorld world = new NonGridWorld(1);
-//		world.valueIterationExample("nongridvi");
-//		world.policyIterationExample("nongridpi");
-//		world.varyGamma();
+		world.varySize();
+		world.varyGamma(true);
+		world.varyGamma(false);
+		world.valueIterationExample("nongridvi");
+		world.policyIterationExample("nongridpi");
 		
-		world.qLearningExample("csv/");
+//		world.qLearningExample("csv/");
 //		world.experimentAndPlotter();
 //		PolicyUtils.rollout(p, st, domain.getModel()).write( "csv/testvi");
 //		Visualizer v = BlockDudeVisualizer.getVisualizer(bd.getMaxx(), bd.getMaxy());
